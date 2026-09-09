@@ -29,9 +29,9 @@ jobs:
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_HSHK_38BF1 }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_CRUD_3FD86 }}'
           channelId: live
-          projectId: hshk-38bf1
+          projectId: crud-3fd86
         continue-on-error: true
 
       - name: Deployment Completion Summary

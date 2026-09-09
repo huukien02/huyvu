@@ -8,13 +8,14 @@
 
 // Firebase Configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyDKTTOdnqXNstS1zDFunLMlx3rlEc5Q1mA",
-  authDomain: "hshk-38bf1.firebaseapp.com",
-  projectId: "hshk-38bf1",
-  storageBucket: "hshk-38bf1.firebasestorage.app",
-  messagingSenderId: "96036069171",
-  appId: "1:96036069171:web:184bb95989b5d6b99ae846",
-  measurementId: "G-J75CMK1DV2"
+  apiKey: "AIzaSyAs1LEj2WXO-6MvS7v2uWg5nPzVsqjbVf0",
+  authDomain: "crud-3fd86.firebaseapp.com",
+  databaseURL: "https://crud-3fd86-default-rtdb.firebaseio.com",
+  projectId: "crud-3fd86",
+  storageBucket: "crud-3fd86.firebasestorage.app",
+  messagingSenderId: "663063195093",
+  appId: "1:663063195093:web:5d892cb09a9d2016c7e15c",
+  measurementId: "G-579FGCK6TP"
 };
 
 // Initialize Firebase
