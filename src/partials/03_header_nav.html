@@ -1,7 +1,7 @@
   <header class="site-header" id="site-header">
     <div class="container header-inner">
       <!-- Brand Logo -->
-      <a class="brand-logo" onclick="switchTab('home')" title="Geography Edu">
+      <a class="brand-logo" href="index.html" title="Geography Edu">
         <div class="brand-icon-wrapper">
           <img src="assets/logo.png" alt="High School Help Kit" class="brand-logo-img">
         </div>
@@ -15,7 +15,7 @@
       <nav class="main-nav" id="main-nav">
         <ul class="nav-menu" id="nav-menu">
           <li>
-            <a class="nav-link active" data-tab="home" href="javascript:void(0)" onclick="switchTab('home')">
+            <a class="nav-link active" data-tab="home" href="index.html">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
                 <polyline points="9 22 9 12 15 12 15 22"></polyline>
@@ -24,7 +24,7 @@
             </a>
           </li>
           <li>
-            <a class="nav-link" data-tab="documents" href="javascript:void(0)" onclick="switchTab('documents')">
+            <a class="nav-link" data-tab="documents" href="tai-lieu.html">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
                 <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
@@ -33,7 +33,7 @@
             </a>
           </li>
           <li>
-            <a class="nav-link" data-tab="contact" href="javascript:void(0)" onclick="switchTab('contact')">
+            <a class="nav-link" data-tab="contact" href="lien-he.html">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path
                   d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z">
@@ -43,7 +43,7 @@
             </a>
           </li>
           <li>
-            <a class="nav-link ai-nav-link" data-tab="ai-chat" href="javascript:void(0)" onclick="switchTab('ai-chat')">
+            <a class="nav-link ai-nav-link" data-tab="ai-chat" href="ai-chat.html">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="10"></circle>
                 <path d="M8 12h.01M12 12h.01M16 12h.01"></path>
@@ -53,7 +53,7 @@
             </a>
           </li>
           <li>
-            <a class="nav-link globe-nav-link" data-tab="globe" href="javascript:void(0)" onclick="switchTab('globe')">
+            <a class="nav-link globe-nav-link" data-tab="globe" href="dia-cau-3d.html">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="10"></circle>
                 <line x1="2" y1="12" x2="22" y2="12"></line>
@@ -64,7 +64,7 @@
             </a>
           </li>
           <li id="nav-link-admin" style="display: none;">
-            <a class="nav-link" data-tab="admin-panel" style="color: #b45309;" href="javascript:void(0)" onclick="switchTab('admin-panel')">
+            <a class="nav-link" data-tab="admin-panel" style="color: #b45309;" href="quan-tri.html">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="3" width="7" height="7"></rect>
                 <rect x="14" y="3" width="7" height="7"></rect>
@@ -79,13 +79,13 @@
           <li class="nav-menu-mobile-extra">
             <div class="nav-mobile-divider"></div>
             <div class="nav-mobile-auth-section" id="nav-mobile-auth-section">
-              <div id="nav-mobile-guest-actions" style="display: flex; gap: 8px; width: 100%;">
+              <div id="nav-mobile-guest-actions" class="auth-guest-only" style="gap: 8px; width: 100%;">
                 <button type="button" class="btn btn-secondary btn-sm" style="flex: 1;"
                   onclick="openModal('modal-login'); closeMobileNav();" data-i18n="login">Đăng nhập</button>
                 <button type="button" class="btn btn-primary btn-sm" style="flex: 1;"
                   onclick="openModal('modal-register'); closeMobileNav();" data-i18n="register">Đăng ký</button>
               </div>
-              <div id="nav-mobile-user-actions" style="display: none; flex-direction: column; gap: 8px; width: 100%;">
+              <div id="nav-mobile-user-actions" class="auth-user-only" style="flex-direction: column; gap: 8px; width: 100%;">
                 <div class="nav-mobile-user-card" onclick="openChangePasswordModal(); closeMobileNav();">
                   <div class="user-avatar" id="nav-mobile-user-avatar">A</div>
                   <div class="user-info">
@@ -192,7 +192,7 @@
         </button>
 
         <!-- Guest Box -->
-        <div id="auth-guest-box" style="display: flex; gap: 8px;">
+        <div id="auth-guest-box" class="auth-guest-only" style="gap: 8px;">
           <button class="btn btn-sm btn-secondary" data-i18n="login" onclick="openModal('modal-login')">Đăng
             nhập</button>
           <button class="btn btn-sm btn-primary" data-i18n="register" onclick="openModal('modal-register')">Đăng
@@ -200,7 +200,7 @@
         </div>
 
         <!-- Logged-in User Box -->
-        <div id="auth-user-box" style="display: none; align-items: center; gap: 8px;">
+        <div id="auth-user-box" class="auth-user-only" style="align-items: center; gap: 8px;">
           <div class="user-profile-badge" title="Nhấn để đổi mật khẩu hoặc xem thông tin tài khoản"
             onclick="openChangePasswordModal()">
             <div class="user-avatar" id="auth-user-avatar">A</div>
@@ -239,84 +239,3 @@
 
   <!-- Mobile Backdrop Overlay -->
   <div class="mobile-nav-backdrop" id="mobile-nav-backdrop" onclick="closeMobileNav()"></div>
-
-  <!-- Hero Section -->
-  <section class="hero-section">
-    <div class="hero-pattern"></div>
-    <div class="hero-glow-1"></div>
-    <div class="hero-glow-2"></div>
-    <div class="container hero-content">
-      <div class="hero-tag">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polygon
-            points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2">
-          </polygon>
-        </svg>
-        <span data-i18n="heroBadge">High School Help Kit</span>
-      </div>
-      <h1 class="hero-title" data-i18n-html="heroTitleFull">
-        Nền Tảng Lưu Trữ & Học Tập <br>
-        <span class="gradient-text">Địa Lí Toàn Diện 4.0</span>
-      </h1>
-      <p class="hero-desc" data-i18n-html="heroDesc">
-        Hệ thống tài liệu chuẩn hoá <strong>Địa lí đại cương</strong> & <strong>Địa lí Việt Nam</strong>. Phân chia rõ
-        ràng giữa Địa lí Tự nhiên và Kinh tế - Xã hội.
-      </p>
-
-      <div class="hero-cta-group">
-        <button class="btn btn-lg btn-primary" onclick="switchTab('documents')">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-          </svg>
-          <span data-i18n="btnExploreDocs">Khám phá Kho Tài Liệu</span>
-        </button>
-        <button class="btn btn-lg btn-secondary"
-          onclick="switchTab('home'); document.getElementById('section-group-posts').scrollIntoView({behavior: 'smooth'});">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-            <circle cx="9" cy="7" r="4"></circle>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-          </svg>
-          <span data-i18n="btnSavedDocs">Cộng Đồng Group Địa Lí</span>
-        </button>
-        <button class="btn btn-lg btn-outline-primary"
-          onclick="switchTab('documents'); setTimeout(() => { document.getElementById('exam-hub-section')?.scrollIntoView({behavior: 'smooth'}); document.getElementById('exam-code-input')?.focus(); }, 150);">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-            <path d="M9 12l2 2 4-4"/>
-          </svg>
-          <span>Thi Online &amp; Khảo Sát</span>
-        </button>
-      </div>
-
-      <!-- Quick Stats -->
-      <div class="hero-stats">
-        <div class="stat-item">
-          <div class="stat-num" id="stat-total-docs">8+</div>
-          <div class="stat-label" data-i18n="statDocs">Tài liệu phân loại</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-num">100%</div>
-          <div class="stat-label" data-i18n="statStandard">Chuẩn chương trình mới</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-num" id="stat-total-downloads">12,500+</div>
-          <div class="stat-label" data-i18n="statDownloads">Lượt xem & Tải về</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-num" id="stat-total-users">2,000+</div>
-          <div class="stat-label" data-i18n="statUsers">Học sinh & Phụ huynh</div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Main View Container (Single Page Application Tabs) -->
-  <main class="main-view-container">
-    <div class="container">
-
-      <!-- ====================================================================
-      TAB 1: TRANG CHỦ (HOME)
-      ==================================================================== -->

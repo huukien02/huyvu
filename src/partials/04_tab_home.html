@@ -1,3 +1,79 @@
+  <!-- Hero Section (Trang chủ) -->
+  <section class="hero-section">
+    <div class="hero-pattern"></div>
+    <div class="hero-glow-1"></div>
+    <div class="hero-glow-2"></div>
+    <div class="container hero-content">
+      <div class="hero-tag">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polygon
+            points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2">
+          </polygon>
+        </svg>
+        <span data-i18n="heroBadge">High School Help Kit</span>
+      </div>
+      <h1 class="hero-title" data-i18n-html="heroTitleFull">
+        Nền Tảng Lưu Trữ & Học Tập <br>
+        <span class="gradient-text">Địa Lí Toàn Diện 4.0</span>
+      </h1>
+      <p class="hero-desc" data-i18n-html="heroDesc">
+        Hệ thống tài liệu chuẩn hoá <strong>Địa lí đại cương</strong> & <strong>Địa lí Việt Nam</strong>. Phân chia rõ
+        ràng giữa Địa lí Tự nhiên và Kinh tế - Xã hội.
+      </p>
+
+      <div class="hero-cta-group">
+        <a class="btn btn-lg btn-primary" href="tai-lieu.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+          </svg>
+          <span data-i18n="btnExploreDocs">Khám phá Kho Tài Liệu</span>
+        </a>
+        <button class="btn btn-lg btn-secondary"
+          onclick="document.getElementById('section-group-posts').scrollIntoView({behavior: 'smooth'});">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+          </svg>
+          <span data-i18n="btnSavedDocs">Cộng Đồng Group Địa Lí</span>
+        </button>
+        <a class="btn btn-lg btn-outline-primary" href="tai-lieu.html#exam-hub-section">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="M9 12l2 2 4-4"/>
+          </svg>
+          <span>Thi Online &amp; Khảo Sát</span>
+        </a>
+      </div>
+
+      <!-- Quick Stats -->
+      <div class="hero-stats">
+        <div class="stat-item">
+          <div class="stat-num" id="stat-total-docs">8+</div>
+          <div class="stat-label" data-i18n="statDocs">Tài liệu phân loại</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num">100%</div>
+          <div class="stat-label" data-i18n="statStandard">Chuẩn chương trình mới</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num" id="stat-total-downloads">12,500+</div>
+          <div class="stat-label" data-i18n="statDownloads">Lượt xem & Tải về</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num" id="stat-total-users">2,000+</div>
+          <div class="stat-label" data-i18n="statUsers">Học sinh & Phụ huynh</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main View Container -->
+  <main class="main-view-container">
+    <div class="container">
+
       <div class="tab-view active" id="tab-view-home">
 
         <!-- Dynamic Exam Countdown Banner Widget (Customizable by Admin) -->
@@ -126,6 +202,5 @@
 
       </div>
 
-      <!-- ====================================================================
-      TAB 2: KHO TÀI LIỆU (DOCUMENTS REPOSITORY)
-      ==================================================================== -->
+    </div>
+  </main>

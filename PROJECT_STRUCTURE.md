@@ -11,9 +11,14 @@
 
 ```text
 d:\hshk.geo/
-├── 📄 index.html                # Giao diện chính (SPA), tích hợp toàn bộ modal, view và Auth Gate
-├── 📄 server.js                  # Backend API Gateway (Node.js HTTP Server) tích hợp Gemini AI Proxy & Rate Limiting
-├── 📄 server.ps1                 # Backend Server dự phòng chạy bằng PowerShell Native
+├── 📄 index.html                # Trang chủ (build từ src/partials)
+├── 📄 tai-lieu.html              # Trang Kho tài liệu
+├── 📄 luu.html                   # Trang Tài liệu đã lưu
+├── 📄 lien-he.html               # Trang Liên hệ & Confession
+├── 📄 ai-chat.html               # Trang Hỏi Trợ Lí AI
+├── 📄 quan-tri.html              # Trang Quản trị Admin
+├── 📄 dia-cau-3d.html            # Trang Địa Cầu 3D
+├── 📁 src/partials/              # Các mảnh HTML dùng chung, build_html.js ghép thành 7 trang trên
 ├── 📄 firestore.rules            # Hệ thống phân quyền & bảo mật cơ sở dữ liệu Cloud Firestore
 ├── 📄 sw.js                      # Service Worker xử lý bộ nhớ đệm (Cache) & hỗ trợ Offline PWA
 ├── 📄 manifest.json              # Cấu hình Progressive Web App (PWA) cài đặt ứng dụng trên di động/PC
@@ -39,7 +44,6 @@ d:\hshk.geo/
 └── 📁 tests/                     # Bộ kiểm thử tự động (PowerShell & Node.js Test Suite)
     ├── 📄 run_all_tests.ps1      # Script chạy toàn bộ test tự động trên Windows
     ├── 📄 run_node_tests.js      # Script chạy unit test trên môi trường Node.js
-    ├── 📄 test_api_gateway.ps1   # Kiểm tra API Gateway, Health Check, Rate Limiter
     ├── 📄 test_auth_security.ps1 # Kiểm tra luồng xác thực & bảo mật tài khoản
     ├── 📄 test_blacklist_security.ps1 # Kiểm tra cơ chế chặn email/tài khoản vi phạm
     ├── 📄 test_crypto_vault.ps1  # Kiểm tra mã hóa mật khẩu & an toàn dữ liệu
@@ -52,10 +56,10 @@ d:\hshk.geo/
 ## 🧩 CHI TIẾT CÁC THÀNH PHẦN CHÍNH (CORE COMPONENTS)
 
 ### 1. Frontend & Giao diện người dùng (Client-Side)
-* **[index.html](file:///d:/hshk.geo/index.html):** 
-  * Cấu trúc Single Page Application (SPA).
-  * Chứa cổng bảo vệ quyền truy cập (`Auth Gate`), thanh trạng thái mạng (Online/Offline), hệ thống Navigation, kho tài liệu phân cấp (Lớp 10, 11, 12, Chuyên đề), hòm thư Confession, và bảng điều khiển Quản trị viên (Admin Dashboard).
+* **Kiến trúc đa trang (Multi-Page):** Ứng dụng gồm 7 trang HTML độc lập, mỗi trang có URL riêng (index.html, tai-lieu.html, luu.html, lien-he.html, ai-chat.html, quan-tri.html, dia-cau-3d.html), thay vì gộp tất cả vào 1 trang duy nhất như trước. Mỗi trang được lắp ráp từ các mảnh dùng chung trong `src/partials/` (đầu trang, cổng Auth Gate, thanh điều hướng, modal, script) cộng với đúng 1 mảnh nội dung riêng của trang đó, thông qua `tools/build_html.js` (`npm run build`). Sau khi sửa bất kỳ file trong `src/partials/`, cần chạy lại `npm run build` để cập nhật cả 7 trang.
+  * Mỗi trang đều chứa cổng bảo vệ quyền truy cập (`Auth Gate`), thanh trạng thái mạng (Online/Offline), thanh điều hướng chung, và toàn bộ modal dùng chung.
   * Tích hợp các thẻ bảo mật trình duyệt: `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`.
+  * `js/app.js` phát hiện trang đang mở dựa trên phần tử gốc có mặt trong DOM (ví dụ `#tab-view-documents`) để chỉ render đúng nội dung trang đó; hàm `switchTab()` cũ giờ chỉ còn dùng để điều hướng thật (`window.location.href`) khi cần chuyển sang trang khác.
 * **[css/style.css](file:///d:/hshk.geo/css/style.css):**
   * Thiết kế giao diện hiện đại với phong cách Glassmorphism, hỗ trợ Dark Mode tự động/thủ công, hiệu ứng chuyển cảnh mượt mà và tương thích 100% thiết bị di động.
 * **[js/app.js](file:///d:/hshk.geo/js/app.js):**
@@ -64,20 +68,16 @@ d:\hshk.geo/
   * Xử lý đăng ký, đăng nhập, đăng xuất, đổi mật khẩu.
   * Tích hợp cơ chế phát hiện dò mật khẩu (Brute-force protection) và ghi nhận cảnh báo vào `security_incidents`.
 * **[js/ai-chat.js](file:///d:/hshk.geo/js/ai-chat.js):**
-  * Cung cấp khung chat AI trực tiếp trên web, kết nối qua Backend API Gateway để giải đáp kiến thức Địa lý 24/7.
+  * Cung cấp khung chat AI trực tiếp trên web, gọi thẳng Google Gemini API từ trình duyệt (không qua backend) để giải đáp kiến thức Địa lý 24/7.
 * **[js/i18n.js](file:///d:/hshk.geo/js/i18n.js):**
   * Hệ thống chuyển ngữ linh hoạt giữa tiếng Việt và tiếng Anh cho toàn bộ giao diện và thông báo.
 
 ---
 
-### 2. Backend & API Gateway
-* **[server.js](file:///d:/hshk.geo/server.js) (Node.js):**
-  * Máy chủ web tĩnh kết hợp API Gateway bảo mật.
-  * Đóng vai trò Reverse Proxy an toàn cho Google Gemini AI (`/api/ai/chat`, `/api/ai/translate`), giúp ẩn hoàn toàn `GEMINI_API_KEY` khỏi mã nguồn phía client.
-  * Tích hợp **In-memory Rate Limiter** chống spam request (tối đa 30 requests/phút/IP).
-  * Tự động gắn các Header bảo mật HTTP (`X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`).
-* **[server.ps1](file:///d:/hshk.geo/server.ps1) (PowerShell):**
-  * Máy chủ web dự phòng nhẹ trên môi trường Windows mà không cần cài đặt thêm runtime bên ngoài.
+### 2. Kết nối AI (Client-side)
+* Dự án không còn backend riêng: `server.js` và `server.ps1` đã được gỡ bỏ.
+* [js/ai-chat.js](file:///d:/hshk.geo/js/ai-chat.js) và [js/app.js](file:///d:/hshk.geo/js/app.js) gọi thẳng Google Gemini API từ trình duyệt bằng `GEMINI_API_KEY` nhúng trong mã nguồn (`AI_CONFIG.API_KEY`).
+* Lưu ý bảo mật: vì key nằm trong mã nguồn phía client nên bất kỳ ai xem mã nguồn trang đều có thể lấy được key này.
 
 ---
 

@@ -7,8 +7,9 @@
 // Dynamic Runtime Key Decryption & Secure Provider removed.
 
 const AI_CONFIG = {
-  API_URL: "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
-  MODEL: "gemini-1.5-flash",
+  API_URL: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+  API_KEY: "AQ.Ab8RN6IIwIT84s9ZX-pzn6mrmyDT--dzyuPScRsYFkPnRuy16w",
+  MODEL: "gemini-2.5-flash",
   SYSTEM_PROMPT: `Ban la tro ly AI chuyen sau cua du an "Geography Edu - High School Help Kit", mot nen tang giao duc Dia li danh cho hoc sinh THCS va THPT Viet Nam. Nhiem vu cua ban: Giai dap cau hoi ve kien thuc Dia li (tu nhien, kinh te - xa hoi, Dia li Viet Nam, Dia li dai cuong), Ho tro on luyen kien thuc Dia li theo chuong trinh THCS/THPT, Giup hoc sinh hieu ban do, Atlat, so lieu thong ke, Tu van phuong phap hoc tap va on thi Dia li hieu qua. Phong cach: Chuyen nghiep, chuan muc, de hieu, tieng Viet chuan muc, khong su dung emoji. Luon nho: Ban la "Tro Ly Dia Li AI" cua Geography Edu!`,
   MAX_HISTORY: 10,
   MAX_INPUT_LENGTH: 2000,
@@ -376,23 +377,25 @@ async function aiSendMessage() {
  try {
   let reply = "";
 
-  const proxyRes = await fetch("/api/ai/chat", {
+  // Goi truc tiep Gemini API tu client (khong qua backend proxy)
+  const apiRes = await fetch(`${AI_CONFIG.API_URL}?key=${encodeURIComponent(AI_CONFIG.API_KEY)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: apiMessages,
-      systemInstruction: AI_CONFIG.SYSTEM_PROMPT
+      systemInstruction: { parts: [{ text: AI_CONFIG.SYSTEM_PROMPT }] },
+      generationConfig: { temperature: 0.35, maxOutputTokens: 1500 }
     })
   });
 
-  if (!proxyRes.ok) {
-    const err = await proxyRes.json().catch(() => ({}));
-    throw new Error(err.error || `Lỗi phản hồi máy chủ (${proxyRes.status})`);
+  const apiData = await apiRes.json().catch(() => ({}));
+
+  if (!apiRes.ok) {
+    throw new Error(apiData.error?.message || `Lỗi phản hồi máy chủ (${apiRes.status})`);
   }
 
-  const proxyData = await proxyRes.json();
-  if (proxyData.candidates && proxyData.candidates[0]?.content?.parts?.[0]?.text) {
-    reply = proxyData.candidates[0].content.parts[0].text;
+  if (apiData.candidates && apiData.candidates[0]?.content?.parts?.[0]?.text) {
+    reply = apiData.candidates[0].content.parts[0].text;
   } else {
     reply = "Xin lỗi, không nhận được phản hồi phù hợp. Vui lòng thử lại với câu hỏi khác!";
   }

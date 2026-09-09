@@ -61,12 +61,11 @@ runTest(".env.example contains required template keys", () => {
   assert.ok(envExample.includes("FIREBASE_STORAGE_BUCKET="));
 });
 
-// --- Test 5: Server backend proxy routes ---
-runTest("server.js defines /api/health and /api/ai/chat routes", () => {
-  const serverJs = fs.readFileSync(path.join(__dirname, "../server.js"), "utf-8");
-  assert.ok(serverJs.includes("/api/health"));
-  assert.ok(serverJs.includes("/api/ai/chat"));
-  assert.ok(serverJs.includes("/api/ai/translate"));
+// --- Test 5: AI config calls Gemini directly (no backend proxy) ---
+runTest("ai-chat.js defines a Gemini API key and endpoint for direct client calls", () => {
+  const aiChatJs = fs.readFileSync(path.join(__dirname, "../js/ai-chat.js"), "utf-8");
+  assert.ok(aiChatJs.includes("generativelanguage.googleapis.com"));
+  assert.ok(aiChatJs.includes("API_KEY"));
 });
 
 console.log(`\nCI Test Results: ${passed} / ${total} Passed\n`);

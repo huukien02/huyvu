@@ -262,27 +262,10 @@ const DEFAULT_CONFESSIONS = [
   }
 ];
 
-// Initial Seed Users — Danh sách tài khoản Admin
-const DEFAULT_USERS = [
-  {
-    id: "usr-admin",
-    name: "Trần Huy Vũ",
-    email: "vut510624@gmail.com",
-    password: "098397487818112010",
-    role: "admin",
-    userType: "Admin",
-    createdAt: "01/08/2026"
-  },
-  {
-    id: "usr-admin-hshk",
-    name: "Ban Điều Hành HSHK",
-    email: "hshk.project@gmail.com",
-    password: "highschoolhelpkitprojecthanoistudents",
-    role: "admin",
-    userType: "Admin",
-    createdAt: "25/08/2026"
-  }
-];
+// Ghi chú: Danh sách tài khoản Admin khởi tạo (DEFAULT_USERS) đã được loại bỏ.
+// Mật khẩu không còn được seed cứng vào Firestore — Super Admin dùng xác thực
+// cố định phía client (xem SUPER_ADMIN_EMAIL trong js/auth.js), các Admin khác
+// đăng ký như người dùng thường và được cấp quyền qua ADMIN_EMAILS bên dưới.
 
 // Initial Seed Data for Exams & Surveys (Phòng thi & Khảo sát trực tuyến)
 const DEFAULT_EXAMS = [
@@ -537,7 +520,7 @@ class GeoDataManager {
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch (e) {}
-    return typeof DEFAULT_USERS !== "undefined" ? [...DEFAULT_USERS] : [];
+    return [];
   }
 
   _loadCachedConfessions() {
@@ -633,24 +616,9 @@ class GeoDataManager {
         }
       } catch(e) { console.warn("[Firestore] Notice: confessions seed skipped:", e.message); }
 
-      // 6. Ensure Admin users exist and are up to date
-      try {
-        for (const adminUser of DEFAULT_USERS) {
-          const adminDoc = await db.collection(COLLECTIONS.USERS).doc(adminUser.id).get();
-          if (!adminDoc.exists) {
-            console.log(`[Firestore] Seeding admin user (${adminUser.email})...`);
-            await db.collection(COLLECTIONS.USERS).doc(adminUser.id).set(adminUser);
-          } else {
-            // Update admin info to latest
-            await db.collection(COLLECTIONS.USERS).doc(adminUser.id).update({
-              name: adminUser.name,
-              password: adminUser.password,
-              role: "admin",
-              userType: "Admin"
-            });
-          }
-        }
-      } catch(e) { console.warn("[Firestore] Notice: admin users seed skipped:", e.message); }
+      // 6. (Đã loại bỏ) Không còn seed tài khoản Admin dạng plaintext vào Firestore.
+      // Super Admin dùng xác thực cố định phía client (js/auth.js), Admin khác
+      // đăng ký qua Firebase Authentication như người dùng thường.
 
       try {
         // Remove legacy admin account if exists
@@ -1810,7 +1778,7 @@ class GeoDataManager {
     if (!inputPwd) return false;
     const currentMaintPwd = (this._cache.maintenance && this._cache.maintenance.password) || "highschoolhelpkitprojecthanoistudents";
     const cleanInput = inputPwd.trim();
-    return cleanInput === currentMaintPwd || cleanInput === "highschoolhelpkitprojecthanoistudents" || cleanInput === "098397487818112010";
+    return cleanInput === currentMaintPwd || cleanInput === "highschoolhelpkitprojecthanoistudents";
   }
 
   async setMaintenanceStatus(enabled, password, byUser) {

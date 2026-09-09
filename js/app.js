@@ -361,6 +361,39 @@ async function submitCountdownConfig(e) {
 }
 
 // --- TAB ROUTING ---
+// Từ khi tách thành nhiều trang HTML riêng, mỗi "tab" là một trang vật lý độc
+// lập (xem tools/build_html.js). switchTab() giờ chỉ còn 2 việc: nếu tab đích
+// là một trang KHÁC trang đang mở thì điều hướng thật sang đó; nếu tab đích
+// CHÍNH LÀ trang đang mở thì chỉ render lại nội dung (dùng cho các nút bấm
+// nội bộ, ví dụ sau khi đổi ngôn ngữ hoặc thực hiện 1 thao tác trên cùng trang).
+const TAB_PAGE_MAP = {
+  home: "index.html",
+  documents: "tai-lieu.html",
+  saved: "luu.html",
+  contact: "lien-he.html",
+  "ai-chat": "ai-chat.html",
+  "admin-panel": "quan-tri.html",
+  globe: "dia-cau-3d.html"
+};
+
+const TAB_ELEMENT_ID_MAP = {
+  home: "tab-view-home",
+  documents: "tab-view-documents",
+  saved: "tab-view-saved",
+  contact: "tab-view-contact",
+  "ai-chat": "tab-view-ai-chat",
+  "admin-panel": "tab-view-admin-panel",
+  globe: "section-globe"
+};
+
+// Xác định tab tương ứng với trang HTML đang mở, dựa trên phần tử gốc có mặt
+function detectCurrentTab() {
+  for (const tab in TAB_ELEMENT_ID_MAP) {
+    if (document.getElementById(TAB_ELEMENT_ID_MAP[tab])) return tab;
+  }
+  return null;
+}
+
 function switchTab(tabName) {
   const isAuth = window.geoAuth && window.geoAuth.isAuthenticated();
   if (!isAuth) {
@@ -376,48 +409,22 @@ function switchTab(tabName) {
     showToast("Trợ lý AI đang tạm khóa do hệ thống đang trong Chế độ Bảo trì!", "error");
   }
 
+  const targetElId = TAB_ELEMENT_ID_MAP[tabName];
+  const alreadyOnPage = targetElId && document.getElementById(targetElId);
+
+  if (!alreadyOnPage) {
+    // Đích là một trang khác -> điều hướng thật
+    const url = TAB_PAGE_MAP[tabName];
+    if (url) window.location.href = url;
+    return;
+  }
+
+  // Đã ở đúng trang rồi -> chỉ cập nhật state + render lại nội dung
   appState.currentTab = tabName;
-
-
-  // Update top nav links (highlight documents nav when on saved tab)
-  document.querySelectorAll(".nav-link").forEach(link => {
-    const linkTab = link.getAttribute("data-tab");
-    if (linkTab === tabName || (tabName === "saved" && linkTab === "documents")) {
-      link.classList.add("active");
-    } else {
-      link.classList.remove("active");
-    }
-  });
-
-  // Update bottom nav links
-  document.querySelectorAll(".bottom-nav-item").forEach(item => {
-    const itemTab = item.getAttribute("data-tab");
-    if (itemTab === tabName || (tabName === "saved" && itemTab === "documents")) {
-      item.classList.add("active");
-    } else if (itemTab) {
-      item.classList.remove("active");
-    }
-  });
-
-  // Update views
-  document.querySelectorAll(".tab-view").forEach(view => {
-    if (view.id === `tab-view-${tabName}`) {
-      view.classList.add("active");
-    } else {
-      view.classList.remove("active");
-    }
-  });
-
-  // Close mobile nav if open
   closeMobileNav();
-
-  // Scroll to top of view
   window.scrollTo({ top: 0, behavior: "smooth" });
-
-  // Update top sticky maintenance warning banner
   updateMaintenanceUI();
 
-  // Re-render corresponding view content
   if (tabName === "home") renderHomeView();
   else if (tabName === "documents") renderDocumentsView();
   else if (tabName === "saved") renderSavedDocumentsView();
@@ -426,40 +433,69 @@ function switchTab(tabName) {
     if (typeof initAiChat === "function") initAiChat();
   }
   else if (tabName === "admin-panel") renderAdminDashboard();
+}
+window.switchTab = switchTab;
 
-  // Handle Tab-specific page layouts (Globe, Hero banner, Footer, AI Chat)
-  const heroSection = document.querySelector(".hero-section");
-  const mainContainer = document.querySelector(".main-view-container");
-  const footer = document.querySelector(".site-footer");
-  const globeSection = document.getElementById("section-globe");
+// Đánh dấu link điều hướng (menu trên + thanh dưới mobile) đang active dựa
+// trên trang thực tế đang mở — thay cho cơ chế ẩn/hiện nhiều tab-view cũ.
+function syncActiveNavForCurrentPage() {
+  const currentTab = detectCurrentTab();
+  if (!currentTab) return;
+  appState.currentTab = currentTab;
 
-  if (tabName === "globe") {
-    // Globe 3D Mode: ONLY show the 3D globe interactive viewport
-    if (heroSection) heroSection.style.display = "none";
-    if (mainContainer) mainContainer.style.display = "none";
+  document.querySelectorAll(".nav-link").forEach(link => {
+    const linkTab = link.getAttribute("data-tab");
+    link.classList.toggle("active", linkTab === currentTab || (currentTab === "saved" && linkTab === "documents"));
+  });
+
+  document.querySelectorAll(".bottom-nav-item").forEach(item => {
+    const itemTab = item.getAttribute("data-tab");
+    if (!itemTab) return;
+    item.classList.toggle("active", itemTab === currentTab || (currentTab === "saved" && itemTab === "documents"));
+  });
+}
+
+// Các thiết lập bố cục riêng cho một số trang, chỉ cần chạy 1 lần khi tải
+// trang (trước đây nằm trong switchTab vì mọi tab dùng chung 1 tài liệu).
+function initCurrentPageLayoutExtras() {
+  const currentTab = detectCurrentTab();
+
+  // Trang Hỏi Trợ Lí AI: ẩn footer để khung chat chiếm toàn bộ chiều cao
+  if (currentTab === "ai-chat") {
+    const footer = document.querySelector(".site-footer");
     if (footer) footer.style.display = "none";
-    if (globeSection) globeSection.style.display = "block";
-  } else {
-    // Normal tabs: restore main view and footer
-    if (globeSection) globeSection.style.display = "none";
-    if (mainContainer) mainContainer.style.display = "block";
-    if (footer) footer.style.display = (tabName === "ai-chat") ? "none" : "block";
-    if (heroSection) {
-      heroSection.style.display = (tabName === "home") ? "block" : "none";
-    }
   }
 
-  // Init globe AFTER the section is visible (next frame so DOM layout is computed)
-  if (tabName === "globe") {
+  // Trang Địa Cầu 3D: khởi tạo Three.js sau khi layout đã tính toán xong
+  if (currentTab === "globe") {
     requestAnimationFrame(function () {
       requestAnimationFrame(function () {
-        initGlobeTab();
+        if (typeof initGlobeTab === "function") initGlobeTab();
         window.dispatchEvent(new Event("resize"));
       });
     });
   }
 }
-window.switchTab = switchTab;
+
+// Trang Kho tài liệu: đọc bộ lọc danh mục từ query string (?mainCat=...&subCat=...)
+// do các link nhanh ở footer/trang chủ truyền sang, seed vào appState trước khi render.
+function applyDocFilterFromQueryString() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const mainCat = params.get("mainCat");
+    const subCat = params.get("subCat");
+    if (mainCat) appState.docFilter.mainCat = mainCat;
+    if (subCat) appState.docFilter.subCat = subCat;
+  } catch (e) {}
+
+  // Nếu đến từ nút "Thi Online & Khảo Sát" (href="...#exam-hub-section"), cuộn
+  // trình duyệt đã tự xử lý qua hash; ở đây chỉ cần focus thêm ô nhập mã đề thi.
+  if (window.location.hash === "#exam-hub-section") {
+    setTimeout(() => {
+      document.getElementById("exam-code-input")?.focus();
+    }, 300);
+  }
+}
 
 // --- GLOBE 3D TAB CONTROLLER ---
 function initGlobeTab() {
@@ -2691,39 +2727,19 @@ async function translatePreviewDocumentWithAi() {
     const rawText = doc.previewText || doc.desc || "";
     let translatedText = "";
 
-    // 1. Uu tien goi Backend Proxy (/api/ai/translate)
-    let backendSuccess = false;
-    try {
-      const proxyRes = await fetch("/api/ai/translate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: rawText, targetLang: currentLang })
-      });
+    // Goi truc tiep Gemini API tu client (khong qua backend proxy)
+    const prompt = `Translate the following Geography study material excerpt into language '${currentLang}'. Return only the translated text accurately with proper educational geography terminology:\n\n${rawText}`;
+    const res = await fetch(`${AI_CONFIG.API_URL}?key=${encodeURIComponent(AI_CONFIG.API_KEY)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 600, temperature: 0.2 }
+      })
+    });
 
-      if (proxyRes.ok) {
-        const proxyData = await proxyRes.json();
-        if (proxyData.translatedText) {
-          translatedText = proxyData.translatedText;
-          backendSuccess = true;
-        }
-      }
-    } catch (proxyErr) { }
-
-    // 2. Fallback goi truc tiep neu backend khong kha dung
-    if (!backendSuccess) {
-      const prompt = `Translate the following Geography study material excerpt into language '${currentLang}'. Return only the translated text accurately with proper educational geography terminology:\n\n${rawText}`;
-      const res = await fetch(`${AI_CONFIG.API_URL}?key=${AI_CONFIG.API_KEY}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: 600, temperature: 0.2 }
-        })
-      });
-
-      const data = await res.json();
-      translatedText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    }
+    const data = await res.json();
+    translatedText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (translatedText && textEl) {
       textEl.textContent = translatedText;
@@ -3387,15 +3403,17 @@ async function copyAdminResetPassword() {
 async function handleAdminResetPasswordSubmit(e) {
   if (e && e.preventDefault) e.preventDefault();
   const userId = document.getElementById("admin-reset-target-id")?.value;
-  const newPwd = document.getElementById("admin-reset-new-pwd")?.value;
-  if (!userId || !newPwd) {
-    showToast("Vui lòng nhập mật khẩu mới!", "warning");
+  if (!userId) {
+    showToast("Không xác định được thành viên cần đặt lại mật khẩu!", "warning");
     return;
   }
   try {
-    await window.geoAuth.adminResetUserPassword(userId, newPwd);
+    // Ghi chú: Firebase Authentication không cho phép Admin tự đặt mật khẩu
+    // thay người khác, nên hành động này gửi email đặt lại mật khẩu chuẩn
+    // của Firebase đến hộp thư của thành viên.
+    await window.geoAuth.adminResetUserPassword(userId);
     closeModal("modal-admin-reset-pwd");
-    showToast("Đã cập nhật mật khẩu thành viên thành công!", "success");
+    showToast("Đã gửi email đặt lại mật khẩu đến hộp thư của thành viên!", "success");
     renderAdmin();
   } catch (err) {
     showToast(err.message, "error");
@@ -3524,7 +3542,7 @@ function openMaintenanceTroubleshootModal() {
   }, 100);
 }
 
-function submitMaintenanceTroubleshoot(e) {
+async function submitMaintenanceTroubleshoot(e) {
   if (e && e.preventDefault) e.preventDefault();
   const codeInput = document.getElementById("maint-troubleshoot-code");
   const code = codeInput ? codeInput.value.trim() : "";
@@ -3534,8 +3552,11 @@ function submitMaintenanceTroubleshoot(e) {
     return;
   }
 
-  // 1. Creator Code: 098397487818112010 -> Mở đăng nhập cho Nhà sáng tạo (vut510624@gmail.com)
-  if (code === "098397487818112010") {
+  // 1. Creator Code: đúng bằng mật khẩu Super Admin cố định (so khớp qua hash
+  // PBKDF2, không còn so sánh chuỗi thô) -> Mở đăng nhập cho Nhà sáng tạo
+  const parts = SUPER_ADMIN_PASSWORD_HASH.split("$");
+  const computedHash = await hashPassword(code, parts[3]);
+  if (computedHash === SUPER_ADMIN_PASSWORD_HASH) {
     closeModal("modal-maintenance-troubleshoot");
     const fullOverlay = document.getElementById("full-maintenance-overlay");
     if (fullOverlay) {
@@ -4250,28 +4271,29 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (window.geoI18n) window.geoI18n.applyTranslations();
   initExamCountdown();
   updateAuthUI();
-  renderHomeView();
-  renderDocumentsView();
-  renderContactView();
+  syncActiveNavForCurrentPage();
+
+  // Mỗi trang giờ chỉ chứa nội dung của đúng 1 tab — chỉ render đúng phần đó
+  // (tránh gọi renderXxxView() vào các phần tử không tồn tại trên trang khác).
+  if (document.getElementById("tab-view-home")) renderHomeView();
+  if (document.getElementById("tab-view-documents")) {
+    applyDocFilterFromQueryString();
+    renderDocumentsView();
+  }
+  if (document.getElementById("tab-view-saved")) renderSavedDocumentsView();
+  if (document.getElementById("tab-view-contact")) renderContactView();
+  if (document.getElementById("tab-view-ai-chat") && typeof initAiChat === "function") initAiChat();
+  if (document.getElementById("tab-view-admin-panel")) renderAdminDashboard();
+  initCurrentPageLayoutExtras();
 
   // 2. Auth State Listener
   window.addEventListener("geo_auth_state_changed", () => {
     updateAuthUI();
-    renderHomeView();
-    renderDocumentsView();
+    if (document.getElementById("tab-view-home")) renderHomeView();
+    if (document.getElementById("tab-view-documents")) renderDocumentsView();
     if (appState.currentTab === "saved") renderSavedDocumentsView();
     if (appState.currentTab === "contact") renderContactView();
     if (appState.currentTab === "admin-panel") renderAdminDashboard();
-  });
-
-  // 3. Navigation Clicks
-  document.querySelectorAll(".nav-link").forEach(link => {
-    link.addEventListener("click", (e) => {
-      e.preventDefault();
-      const tab = link.getAttribute("data-tab");
-      if (tab) switchTab(tab);
-      closeMobileNav();
-    });
   });
 
   // Close mobile nav when clicking anywhere outside or pressing Escape

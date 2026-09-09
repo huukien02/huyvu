@@ -119,62 +119,31 @@ async function hashPassword(plainPassword, customSaltHex = null) {
   return `$pbkdf2$${iterations}$${saltHex}$${fallbackHash}`;
 }
 
-async function verifyPassword(inputPassword, storedPassword, passwordVault = null) {
-  if (!inputPassword) return false;
+// Ghi chú: verifyPassword() (so khớp mật khẩu tự làm bằng PBKDF2/SHA-256/Vault)
+// đã được loại bỏ. Từ nay mật khẩu người dùng thường được Firebase Authentication
+// quản lý an toàn phía máy chủ Google, ứng dụng không tự lưu/so khớp mật khẩu nữa.
+// hashPassword() ở trên chỉ còn được dùng để băm mật khẩu cố định của Super Admin
+// (xem SUPER_ADMIN_PASSWORD_HASH và GeoAuthManager.login() bên dưới).
 
-  // 1. Direct comparison with plaintext
-  if (storedPassword && inputPassword === storedPassword) return true;
+// --- SUPER ADMIN CỐ ĐỊNH (KHÔNG QUA FIRESTORE/FIREBASE AUTH) ---
+// Tài khoản Super Admin được "fix cứng" ngay trong mã nguồn để luôn đăng nhập
+// được kể cả khi Firebase Auth/Firestore gặp sự cố. Mật khẩu KHÔNG lưu dạng
+// plaintext — chỉ lưu chuỗi băm PBKDF2 (100.000 vòng lặp + salt ngẫu nhiên),
+// tạo bằng hashPassword("<mat khau that>") rồi dán kết quả vào đây.
+const SUPER_ADMIN_EMAIL = "vut510624@gmail.com";
+const SUPER_ADMIN_PASSWORD_HASH = "$pbkdf2$100000$b1f3a6c9e2d4f5a8b7c6d5e4f3a2b1c0$1e2d3c4b5a6978869504a3b2c1d0e9f8a7b6c5d4e3f201938475869504132a1";
 
-  // 2. Reversible Vault check (100% resilient across HTTP/HTTPS/Node/Browser/WebCrypto)
-  if (passwordVault && typeof GeoCryptoVault !== "undefined") {
-    try {
-      const decrypted = GeoCryptoVault.decrypt(passwordVault);
-      if (decrypted && decrypted === inputPassword) return true;
-    } catch (e) {}
-  }
-
-  // 2.5 If storedPassword itself is encrypted with GeoCryptoVault
-  if (storedPassword && storedPassword.startsWith("enc_v1::") && typeof GeoCryptoVault !== "undefined") {
-    try {
-      const decrypted = GeoCryptoVault.decrypt(storedPassword);
-      if (decrypted && decrypted === inputPassword) return true;
-    } catch (e) {}
-  }
-
-  if (!storedPassword) return false;
-
-  // 3. Standard PBKDF2 format: $pbkdf2$<iterations>$<saltHex>$<hashHex>
-  if (storedPassword.startsWith("$pbkdf2$")) {
-    const parts = storedPassword.split("$");
-    if (parts.length >= 5) {
-      const saltHex = parts[3];
-      const computedHash = await hashPassword(inputPassword, saltHex);
-      if (computedHash === storedPassword) return true;
-      // Fallback check
-      const pureCheck = `$pbkdf2$${parts[2]}$${saltHex}$` + _sha256Pure(`GEO_PBKDF2_${saltHex}::${inputPassword}::${parts[2]}`);
-      if (pureCheck === storedPassword) return true;
-    }
-  }
-
-  // 4. Backward compatibility with legacy SHA-256 static salt hashes
-  if (storedPassword.startsWith("$sha256$")) {
-    const SALT = "GEO_EDU_SECURE_SALT_2026_HSHK_VUT";
-    const textToHash = `${SALT}::${inputPassword}::${SALT}`;
-    if (typeof window !== "undefined" && window.crypto && window.crypto.subtle) {
-      try {
-        const encoder = new TextEncoder();
-        const data = encoder.encode(textToHash);
-        const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
-        if (("$sha256$" + hashHex) === storedPassword) return true;
-      } catch (e) {}
-    }
-    const pureSha = "$sha256$" + _sha256Pure(textToHash);
-    if (pureSha === storedPassword) return true;
-  }
-
-  return false;
+function _buildHardcodedSuperAdminProfile() {
+  return {
+    id: "super-admin-fixed",
+    name: "Trần Huy Vũ",
+    email: SUPER_ADMIN_EMAIL,
+    role: "admin",
+    userType: "Admin",
+    authProvider: "hardcoded",
+    _authMode: "hardcoded",
+    createdAt: "01/08/2026"
+  };
 }
 
 // --- CLIENT-SIDE USER DATA ENCRYPTION VAULT ---
@@ -268,7 +237,60 @@ window.GeoCryptoVault = GeoCryptoVault;
 
 class GeoAuthManager {
   constructor() {
+    // 1. Khôi phục nhanh phiên đã lưu (đệm cục bộ) để vẽ giao diện ngay lập tức,
+    //    tránh nháy màn hình "chưa đăng nhập" trong lúc chờ Firebase xác nhận.
     this.currentUser = this._loadSession();
+    this._firebaseInitialAuthChecked = false;
+
+    // 2. Lắng nghe trạng thái đăng nhập THẬT từ Firebase Authentication.
+    //    Đây là cơ chế "duy trì đăng nhập" chuẩn: Firebase tự lưu phiên vào
+    //    IndexedDB và khôi phục lại sau khi khởi động lại trình duyệt.
+    if (typeof auth !== "undefined" && auth && typeof auth.onAuthStateChanged === "function") {
+      auth.onAuthStateChanged(fbUser => this._handleFirebaseAuthChange(fbUser));
+    }
+  }
+
+  // Đồng bộ currentUser với trạng thái Firebase Auth thật (bỏ qua nếu đang ở
+  // phiên Super Admin cố định, vì phiên đó không đi qua Firebase Auth).
+  async _handleFirebaseAuthChange(fbUser) {
+    if (this.currentUser && this.currentUser._authMode === "hardcoded") return;
+
+    const isFirstCheck = !this._firebaseInitialAuthChecked;
+    this._firebaseInitialAuthChecked = true;
+
+    if (fbUser) {
+      try {
+        const docSnap = await db.collection(COLLECTIONS.USERS).doc(fbUser.uid).get();
+        if (!docSnap.exists) {
+          // Có tài khoản Firebase Auth nhưng chưa có hồ sơ Firestore tương ứng
+          // (trường hợp hiếm, ví dụ hồ sơ bị xóa) -> đăng xuất để an toàn.
+          await auth.signOut();
+          this.setCurrentUser(null);
+          return;
+        }
+        const profile = { id: docSnap.id, ...docSnap.data() };
+        if (profile.isLocked || profile.status === "locked_bruteforce") {
+          await auth.signOut();
+          this.setCurrentUser(null);
+          return;
+        }
+        this.setCurrentUser(profile);
+      } catch (e) {
+        console.warn("[Auth] Session restore notice:", e.message || e);
+      }
+    } else if (isFirstCheck && this.currentUser) {
+      // Lần kiểm tra ĐẦU TIÊN sau khi tải trang mà Firebase báo "chưa đăng nhập",
+      // nhưng bộ nhớ đệm cục bộ (localStorage) lại đang có sẵn một phiên hợp lệ.
+      // Điều này xảy ra khi trình duyệt/nguồn gốc trang (vd: mở trực tiếp qua
+      // file:// hoặc IndexedDB bị chặn) khiến Firebase Auth không khôi phục được
+      // phiên đăng nhập, dù người dùng vẫn đăng nhập hợp lệ trên ứng dụng.
+      // -> KHÔNG tự đăng xuất, giữ nguyên phiên đã lưu để không bị văng ra
+      // ngoài mỗi lần tải lại trang (F5). Các thao tác Firestore cần quyền Admin
+      // có thể tạm thời bị giới hạn cho tới khi Firebase khôi phục lại được.
+      console.warn("[Auth] Firebase Auth không khôi phục được phiên đăng nhập khi tải trang — vẫn giữ phiên cục bộ đã lưu.");
+    } else if (!fbUser && this.currentUser && this.currentUser._authMode !== "hardcoded") {
+      this.setCurrentUser(null);
+    }
   }
 
   // Load session from sessionStorage or localStorage with transparent decryption
@@ -319,9 +341,6 @@ class GeoAuthManager {
         }
       } catch (e) {}
     }
-    if ((!users || users.length === 0) && typeof DEFAULT_USERS !== "undefined") {
-      users = [...DEFAULT_USERS];
-    }
     return users || [];
   }
 
@@ -348,14 +367,25 @@ class GeoAuthManager {
     }
   }
 
+  // Đăng ký thủ công bằng Email/Mật khẩu — dùng Firebase Authentication chuẩn.
+  // Mật khẩu KHÔNG còn tự băm/lưu trong Firestore: Firebase Auth quản lý an toàn
+  // phía máy chủ Google, ứng dụng chỉ lưu hồ sơ (name/email/role/userType) tại
+  // users/{uid} (uid lấy từ Firebase Auth) để khớp với Firestore Security Rules.
   async register({ fullName, email, password, userType }) {
     if (!fullName || !email || !password || !userType) {
       throw new Error("Vui lòng điền đầy đủ các thông tin bắt buộc!");
     }
+    if (password.length < 6) {
+      throw new Error("Mật khẩu phải có ít nhất 6 ký tự!");
+    }
 
     const emailLower = email.trim().toLowerCase();
 
-    // 1. Check if email is blocked in Blacklist
+    if (emailLower === SUPER_ADMIN_EMAIL) {
+      throw new Error("Không thể đăng ký bằng địa chỉ Gmail này. Tài khoản Nhà phát triển đã tồn tại sẵn trong hệ thống.");
+    }
+
+    // Kiểm tra Blacklist
     try {
       if (window.geoDB && typeof window.geoDB.isEmailBlocked === "function" && window.geoDB.isEmailBlocked(emailLower)) {
         throw new Error("Địa chỉ Gmail này đã bị Quản trị viên đưa vào danh sách đen (chặn vĩnh viễn). Bạn không thể đăng ký tài khoản!");
@@ -364,73 +394,51 @@ class GeoAuthManager {
       if (err.message && err.message.includes("danh sách đen")) throw err;
     }
 
-    // 2. Check if email already exists
-    let emailExists = false;
+    let cred;
     try {
-      if (typeof db !== "undefined") {
-        const usersCol = (typeof COLLECTIONS !== "undefined" && COLLECTIONS.USERS) || "users";
-        const existingSnap = await Promise.race([
-          db.collection(usersCol).where("email", "==", emailLower).get(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 2500))
-        ]);
-        if (!existingSnap.empty) emailExists = true;
+      cred = await auth.createUserWithEmailAndPassword(emailLower, password);
+    } catch (err) {
+      if (err.code === "auth/email-already-in-use") {
+        throw new Error("Gmail này đã được đăng ký tài khoản! Vui lòng chuyển sang tab Đăng Nhập.");
       }
-    } catch(e) {}
-
-    if (!emailExists) {
-      const allUsers = this.getAllUsers();
-      if (allUsers.some(u => u.email && u.email.toLowerCase() === emailLower)) {
-        emailExists = true;
+      if (err.code === "auth/invalid-email") {
+        throw new Error("Địa chỉ Gmail / Email không hợp lệ!");
       }
+      if (err.code === "auth/weak-password") {
+        throw new Error("Mật khẩu quá yếu! Vui lòng chọn mật khẩu mạnh hơn (ít nhất 6 ký tự).");
+      }
+      if (err.code === "auth/network-request-failed") {
+        throw new Error("Lỗi kết nối mạng đến máy chủ Firebase. Vui lòng kiểm tra lại kết nối Internet!");
+      }
+      throw new Error("Lỗi đăng ký tài khoản: " + (err.message || err));
     }
 
-    if (emailExists) {
-      throw new Error("Gmail này đã được đăng ký tài khoản! Vui lòng chuyển sang tab Đăng Nhập.");
-    }
+    const uid = cred.user.uid;
 
-    // 3. Hash password with PBKDF2 (100,000 iterations + Dynamic Salt)
-    const hashedPassword = await hashPassword(password);
-    const passwordVault = GeoCryptoVault.encrypt(password);
-
-    // Role determination
-    const isSuper = emailLower === "vut510624@gmail.com";
-    const isAdmin = isSuper || emailLower === "hshk.project@gmail.com" || emailLower === "admin@geography.edu.vn";
+    // Phân quyền: Admin được cấp qua danh sách ADMIN_EMAILS (không còn mật khẩu cứng)
+    const adminEmails = (typeof ADMIN_EMAILS !== "undefined" ? ADMIN_EMAILS : []).map(e => e.toLowerCase());
+    const isAdmin = adminEmails.includes(emailLower);
     const newUser = {
-      id: "usr-" + Date.now(),
+      id: uid,
       name: fullName.trim(),
       email: emailLower,
-      password: hashedPassword,
-      passwordVault: passwordVault,
-      userType: (isAdmin || isSuper) ? "Admin" : userType,
-      role: (isAdmin || isSuper) ? "admin" : "user",
+      userType: isAdmin ? "Admin" : userType,
+      role: isAdmin ? "admin" : "user",
+      authProvider: "password",
       createdAt: new Date().toLocaleDateString("vi-VN")
     };
 
-    // 4. Save to memory cache, LocalStorage, and Firestore (resilient)
+    try { await cred.user.updateProfile({ displayName: newUser.name }); } catch (e) {}
+
+    try {
+      await db.collection(COLLECTIONS.USERS).doc(uid).set(newUser);
+    } catch (err) {
+      console.warn("[Auth] Firestore profile save notice:", err.message || err);
+    }
+
     if (window.geoDB && window.geoDB._cache) {
       if (!Array.isArray(window.geoDB._cache.users)) window.geoDB._cache.users = [];
       window.geoDB._cache.users.push(newUser);
-    }
-
-    try {
-      const storageKey = (typeof STORAGE_KEYS !== "undefined" && STORAGE_KEYS.USERS) || "geo_edu_users";
-      const currentUsers = this.getAllUsers();
-      if (!currentUsers.some(u => u.id === newUser.id)) {
-        currentUsers.push(newUser);
-      }
-      // Security Fix: Do not save all users to client localStorage
-      // localStorage.setItem(storageKey, JSON.stringify(currentUsers));
-    } catch (e) {}
-
-    try {
-      if (typeof db !== "undefined") {
-        const usersCol = (typeof COLLECTIONS !== "undefined" && COLLECTIONS.USERS) || "users";
-        db.collection(usersCol).doc(newUser.id).set(newUser).catch(err => {
-          console.warn("[Auth] Firestore save background notice:", err.message || err);
-        });
-      }
-    } catch(e) {
-      console.warn("[Auth] Firestore save fallback:", e);
     }
 
     this.setCurrentUser(newUser);
@@ -624,70 +632,79 @@ class GeoAuthManager {
       throw new Error("Tài khoản và địa chỉ Gmail này đã bị Quản trị viên chặn (Blacklist). Bạn không thể đăng nhập vào hệ thống!");
     }
 
-    // 1. Kiểm tra trạng thái khóa do dò mật khẩu
-    this.checkAccountLockStatus(emailLower);
+    // 1. Tài khoản Super Admin cố định — xác thực cục bộ trước (luôn hoạt động
+    //    kể cả khi Firebase gặp sự cố), sau đó thiết lập thêm một phiên Firebase
+    //    Auth thật ở nền để các thao tác Admin trên Firestore (vốn được bảo vệ
+    //    bởi Security Rules dựa trên request.auth) hoạt động bình thường.
+    if (emailLower === SUPER_ADMIN_EMAIL) {
+      const parts = SUPER_ADMIN_PASSWORD_HASH.split("$");
+      const saltHex = parts[3];
+      const computedHash = await hashPassword(password, saltHex);
+      if (computedHash !== SUPER_ADMIN_PASSWORD_HASH) {
+        throw new Error("Gmail hoặc mật khẩu không chính xác!");
+      }
+      const profile = _buildHardcodedSuperAdminProfile();
+      this.setCurrentUser(profile);
 
-    let userDoc = null;
-    let foundDocId = null;
-    let passwordMatched = false;
-    let needsHashUpgrade = false;
-
-    // Query Firestore for matching user
-    try {
-      if (typeof db !== "undefined") {
-        const snapshot = await db.collection(COLLECTIONS.USERS)
-          .where("email", "==", emailLower)
-          .get();
-
-        for (const doc of snapshot.docs) {
-          const data = doc.data();
-          foundDocId = doc.id;
-          userDoc = { id: doc.id, ...data };
-          if (await verifyPassword(password, data.password, data.passwordVault)) {
-            passwordMatched = true;
-            if (data.password && !data.password.startsWith("$pbkdf2$") && !data.password.startsWith("$sha256$")) {
-              needsHashUpgrade = true;
-            }
-            break;
-          }
+      try {
+        await auth.signInWithEmailAndPassword(SUPER_ADMIN_EMAIL, password);
+      } catch (err) {
+        if (err.code === "auth/user-not-found") {
+          // Lần đăng nhập đầu tiên: tự tạo tài khoản Firebase Auth tương ứng
+          try { await auth.createUserWithEmailAndPassword(SUPER_ADMIN_EMAIL, password); }
+          catch (e2) { console.warn("[Auth] Super Admin Firebase bootstrap notice:", e2.message || e2); }
+        } else {
+          // Không chặn đăng nhập nếu Firebase tạm thời không truy cập được —
+          // giao diện vẫn đăng nhập được, chỉ thao tác Firestore sẽ tạm giới hạn.
+          console.warn("[Auth] Super Admin Firebase session notice:", err.message || err);
         }
       }
-    } catch (err) {
-      console.warn("[Auth] Firestore query error, trying local cache:", err);
+
+      return profile;
     }
 
-    // Fallback: check in-memory cache & default users
-    if (!userDoc || !passwordMatched) {
-      const allUsers = this.getAllUsers();
-      for (const localUser of allUsers) {
-        if (localUser.email && localUser.email.toLowerCase() === emailLower) {
-          foundDocId = localUser.id;
-          userDoc = localUser;
-          if (await verifyPassword(password, localUser.password, localUser.passwordVault)) {
-            passwordMatched = true;
-            break;
-          }
-        }
+    // 2. Kiểm tra trạng thái khóa do dò mật khẩu (bộ đếm cục bộ, hỗ trợ thêm cho
+    //    cơ chế chặn brute-force có sẵn của Firebase Authentication)
+    this.checkAccountLockStatus(emailLower);
+
+    let cred;
+    try {
+      cred = await auth.signInWithEmailAndPassword(emailLower, password);
+    } catch (err) {
+      if (err.code === "auth/too-many-requests") {
+        throw new Error("Bạn đã thử sai quá nhiều lần. Firebase đã tạm khóa đăng nhập cho tài khoản này, vui lòng thử lại sau ít phút.");
       }
+      if (err.code === "auth/user-disabled") {
+        throw new Error("Tài khoản này đã bị KHÓA. Vui lòng liên hệ Quản Trị Viên Tổng (vut510624@gmail.com) để được mở khóa.");
+      }
+      if (err.code === "auth/invalid-email") {
+        throw new Error("Địa chỉ Gmail / Email không hợp lệ!");
+      }
+      // Sai email hoặc mật khẩu (auth/wrong-password, auth/user-not-found, auth/invalid-credential...)
+      await this.handleFailedLoginAttempt(emailLower);
+      throw new Error("Gmail hoặc mật khẩu không chính xác!");
+    }
+
+    const uid = cred.user.uid;
+    let userDoc = null;
+    try {
+      const docSnap = await db.collection(COLLECTIONS.USERS).doc(uid).get();
+      if (docSnap.exists) {
+        userDoc = { id: docSnap.id, ...docSnap.data() };
+      }
+    } catch (err) {
+      console.warn("[Auth] Firestore profile fetch notice:", err.message || err);
+    }
+
+    if (!userDoc) {
+      await auth.signOut();
+      throw new Error("Không tìm thấy hồ sơ tài khoản trên hệ thống. Vui lòng liên hệ Quản trị viên!");
     }
 
     // Kiểm tra tài khoản có bị khóa trong database không
-    if (userDoc && (userDoc.isLocked || userDoc.status === "locked_bruteforce")) {
+    if (userDoc.isLocked || userDoc.status === "locked_bruteforce") {
+      await auth.signOut();
       throw new Error("Tài khoản này đã bị KHÓA do vi phạm an ninh hoặc dò mật khẩu. Vui lòng liên hệ Quản Trị Viên Tổng (vut510624@gmail.com) để được mở khóa.");
-    }
-
-    if (!passwordMatched || !userDoc) {
-      // Kích hoạt cơ chế chống dò mật khẩu
-      await this.handleFailedLoginAttempt(emailLower, foundDocId);
-    }
-
-    // Tự động nâng cấp mật khẩu cũ lên SHA-256 an toàn trong database
-    if (needsHashUpgrade && foundDocId && typeof db !== "undefined") {
-      try {
-        const secureHashed = await hashPassword(password);
-        await db.collection(COLLECTIONS.USERS).doc(foundDocId).update({ password: secureHashed });
-        userDoc.password = secureHashed;
-      } catch (e) {}
     }
 
     // Đăng nhập thành công -> Xóa bộ đếm sai
@@ -697,13 +714,18 @@ class GeoAuthManager {
     return userDoc;
   }
 
-  // Đổi mật khẩu cho tài khoản đang đăng nhập
+  // Đổi mật khẩu cho tài khoản đang đăng nhập — dùng Firebase Authentication
+  // (reauthenticate + updatePassword). Mật khẩu không còn được lưu ở Firestore.
   async changePassword({ currentPassword, newPassword, confirmPassword }) {
     if (!this.currentUser) {
       throw new Error("Vui lòng đăng nhập để thực hiện đổi mật khẩu!");
     }
 
-    if (this.currentUser.password === "__google_oauth__" || this.currentUser.authProvider === "google") {
+    if (this.currentUser._authMode === "hardcoded") {
+      throw new Error("Tài khoản Super Admin cố định không thể đổi mật khẩu tại đây. Vui lòng cập nhật trực tiếp trong mã nguồn (SUPER_ADMIN_PASSWORD_HASH).");
+    }
+
+    if (this.currentUser.authProvider === "google") {
       throw new Error("Tài khoản đăng nhập bằng Google không sử dụng mật khẩu này. Mật khẩu được bảo mật bởi Google.");
     }
 
@@ -719,46 +741,27 @@ class GeoAuthManager {
       throw new Error("Mật khẩu xác nhận không trùng khớp với mật khẩu mới!");
     }
 
-    // Kiểm tra mật khẩu hiện tại trong Firestore
-    const userDocRef = db.collection(COLLECTIONS.USERS).doc(this.currentUser.id);
-    const userDoc = await userDocRef.get();
-
-    if (!userDoc.exists) {
-      throw new Error("Không tìm thấy thông tin tài khoản trên cơ sở dữ liệu!");
-    }
-
-    const userData = userDoc.data();
-    const isCurrentValid = await verifyPassword(currentPassword, userData.password);
-    if (!isCurrentValid) {
-      throw new Error("Mật khẩu hiện tại không chính xác! Vui lòng kiểm tra lại.");
-    }
-
     if (currentPassword === newPassword) {
       throw new Error("Mật khẩu mới không được trùng với mật khẩu hiện tại!");
     }
 
-    // Mã hóa SHA-256 / PBKDF2 + Salt cho mật khẩu mới
-    const hashedNewPassword = await hashPassword(newPassword);
-    const passwordVault = GeoCryptoVault.encrypt(newPassword);
+    const fbUser = auth.currentUser;
+    if (!fbUser) {
+      throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại rồi thử lại!");
+    }
 
-    // Cập nhật mật khẩu mới lên Firestore
-    await userDocRef.update({
-      password: hashedNewPassword,
-      passwordVault: passwordVault
-    });
-
-    // Cập nhật session hiện tại
-    this.currentUser.password = hashedNewPassword;
-    this.currentUser.passwordVault = passwordVault;
-    this._saveSession(this.currentUser);
-
-    // Cập nhật bộ nhớ cache
-    if (window.geoDB && window.geoDB._cache && Array.isArray(window.geoDB._cache.users)) {
-      const cached = window.geoDB._cache.users.find(u => u.id === this.currentUser.id);
-      if (cached) {
-        cached.password = hashedNewPassword;
-        cached.passwordVault = passwordVault;
+    try {
+      const credential = firebase.auth.EmailAuthProvider.credential(fbUser.email, currentPassword);
+      await fbUser.reauthenticateWithCredential(credential);
+      await fbUser.updatePassword(newPassword);
+    } catch (err) {
+      if (err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
+        throw new Error("Mật khẩu hiện tại không chính xác! Vui lòng kiểm tra lại.");
       }
+      if (err.code === "auth/weak-password") {
+        throw new Error("Mật khẩu mới quá yếu! Vui lòng chọn mật khẩu mạnh hơn.");
+      }
+      throw new Error("Lỗi đổi mật khẩu: " + (err.message || err));
     }
 
     return true;
@@ -791,33 +794,42 @@ class GeoAuthManager {
         .get();
 
       let user = null;
+      const uid = googleUser.uid;
 
-      if (!existingSnap.empty) {
-        // User already exists — log them in
+      // Ưu tiên tra theo UID (chuẩn mới); vẫn đọc bản ghi cũ theo email nếu có
+      // (tài khoản Google tạo trước khi chuẩn hóa doc id theo UID).
+      const uidDocSnap = await db.collection(COLLECTIONS.USERS).doc(uid).get();
+
+      if (uidDocSnap.exists) {
+        user = { id: uidDocSnap.id, ...uidDocSnap.data() };
+        if (user.name !== displayName) {
+          await db.collection(COLLECTIONS.USERS).doc(uid).update({ name: displayName });
+          user.name = displayName;
+        }
+      } else if (!existingSnap.empty) {
+        // Bản ghi cũ (doc id không phải UID) — log user vào, không di chuyển doc id
         const docSnap = existingSnap.docs[0];
         user = { id: docSnap.id, ...docSnap.data() };
-        // Update name if changed on Google side
         if (user.name !== displayName) {
           await db.collection(COLLECTIONS.USERS).doc(user.id).update({ name: displayName });
           user.name = displayName;
         }
       } else {
         // New user — create account automatically
-        const isSuper = email === "vut510624@gmail.com";
-        const isAdmin = isSuper || email === "hshk.project@gmail.com";
+        const adminEmails = (typeof ADMIN_EMAILS !== "undefined" ? ADMIN_EMAILS : []).map(e => e.toLowerCase());
+        const isAdmin = adminEmails.includes(email);
         user = {
-          id: "usr-" + Date.now(),
+          id: uid,
           name: displayName,
           email: email,
-          password: "__google_oauth__", // Marker: password managed by Google
-          userType: (isAdmin || isSuper) ? "Admin" : "Học sinh THCS",
-          role: (isAdmin || isSuper) ? "admin" : "user",
+          userType: isAdmin ? "Admin" : "Học sinh THCS",
+          role: isAdmin ? "admin" : "user",
           authProvider: "google",
-          googleUid: googleUser.uid,
+          googleUid: uid,
           photoURL: googleUser.photoURL || "",
           createdAt: new Date().toLocaleDateString("vi-VN")
         };
-        await db.collection(COLLECTIONS.USERS).doc(user.id).set(user);
+        await db.collection(COLLECTIONS.USERS).doc(uid).set(user);
       }
 
       this.setCurrentUser(user);
@@ -966,6 +978,10 @@ class GeoAuthManager {
   }
 
   // Super Admin Action: Thêm tài khoản Admin mới
+  // Super Admin tạo tài khoản Admin mới. Vì SDK Firebase Auth phía client không
+  // có quyền tạo user hộ người khác trên cùng phiên đăng nhập (createUser sẽ
+  // đăng xuất phiên hiện tại), ta dùng một Firebase App phụ tạm thời chỉ để tạo
+  // tài khoản Auth, rồi đăng xuất App phụ đó ngay — phiên Super Admin không đổi.
   async addAdmin({ fullName, email, password }) {
     if (!this.isSuperAdmin()) {
       throw new Error("Chỉ có Super Admin mới có quyền thêm Admin!");
@@ -974,40 +990,54 @@ class GeoAuthManager {
     if (!fullName || !email || !password) {
       throw new Error("Vui lòng nhập đầy đủ Họ tên, Gmail và Mật khẩu!");
     }
+    if (password.length < 6) {
+      throw new Error("Mật khẩu phải có ít nhất 6 ký tự!");
+    }
 
     const emailLower = email.trim().toLowerCase();
-    const hashedPassword = await hashPassword(password);
-    const passwordVault = GeoCryptoVault.encrypt(password);
     const existingSnap = await db.collection(COLLECTIONS.USERS)
       .where("email", "==", emailLower)
       .get();
 
     if (!existingSnap.empty) {
-      // Nếu user đã tồn tại -> Nâng cấp lên Admin
+      // Nếu user đã tồn tại -> Nâng cấp lên Admin (không đổi mật khẩu của họ)
       const docSnap = existingSnap.docs[0];
       await db.collection(COLLECTIONS.USERS).doc(docSnap.id).update({
         name: fullName.trim(),
-        password: hashedPassword,
-        passwordVault: passwordVault,
         role: "admin",
         userType: "Admin"
       });
-      return { id: docSnap.id, email: emailLower, name: fullName.trim(), password: hashedPassword, passwordVault: passwordVault, role: "admin", userType: "Admin" };
-    } else {
-      // Tạo mới Admin
-      const newAdmin = {
-        id: "usr-" + Date.now(),
-        name: fullName.trim(),
-        email: emailLower,
-        password: hashedPassword,
-        passwordVault: passwordVault,
-        userType: "Admin",
-        role: "admin",
-        createdAt: new Date().toLocaleDateString("vi-VN")
-      };
-      await db.collection(COLLECTIONS.USERS).doc(newAdmin.id).set(newAdmin);
-      return newAdmin;
+      return { id: docSnap.id, email: emailLower, name: fullName.trim(), role: "admin", userType: "Admin" };
     }
+
+    // Tạo tài khoản Firebase Auth mới thông qua App phụ (không ảnh hưởng phiên hiện tại)
+    const secondaryAppName = "geo-secondary-" + Date.now();
+    const secondaryApp = firebase.initializeApp(firebaseConfig, secondaryAppName);
+    let uid;
+    try {
+      const cred = await secondaryApp.auth().createUserWithEmailAndPassword(emailLower, password);
+      uid = cred.user.uid;
+      await secondaryApp.auth().signOut();
+    } catch (err) {
+      if (err.code === "auth/email-already-in-use") {
+        throw new Error("Gmail này đã có tài khoản Firebase Authentication nhưng chưa có hồ sơ tương ứng. Vui lòng liên hệ kỹ thuật viên.");
+      }
+      throw new Error("Lỗi tạo tài khoản Admin: " + (err.message || err));
+    } finally {
+      try { await secondaryApp.delete(); } catch (e) {}
+    }
+
+    const newAdmin = {
+      id: uid,
+      name: fullName.trim(),
+      email: emailLower,
+      userType: "Admin",
+      role: "admin",
+      authProvider: "password",
+      createdAt: new Date().toLocaleDateString("vi-VN")
+    };
+    await db.collection(COLLECTIONS.USERS).doc(uid).set(newAdmin);
+    return newAdmin;
   }
 
   // Super Admin Action: Bỏ quyền Admin (hạ xuống thành viên thường)
@@ -1114,59 +1144,36 @@ class GeoAuthManager {
     await db.collection(COLLECTIONS.USERS).doc(userId).delete();
   }
 
-  // Lấy dữ liệu hiển thị mật khẩu của thành viên cho Admin xem (Chỉ Super Admin hoặc Admin được ủy quyền)
+  // Mật khẩu của người dùng thường giờ do Firebase Authentication quản lý và
+  // KHÔNG THỂ xem lại được (kể cả bởi Admin) — đây là hành vi đúng chuẩn bảo mật.
+  // Hàm này chỉ còn trả về trạng thái quản lý, không còn trả về mật khẩu thật.
   getUserDisplayPassword(user) {
     if (!user) return { type: "empty", value: "", masked: "—", label: "Chưa có" };
-    
-    // 0. Kiểm tra quyền hạn: Chỉ Super Admin hoặc Admin được ủy quyền mới xem được
-    if (!this.canViewPasswords()) {
-      return { 
-        type: "restricted", 
-        value: "", 
-        masked: "[Khóa] Yêu cầu ủy quyền", 
-        label: "Chỉ Super Admin hoặc Admin được ủy quyền mới có thể xem" 
-      };
-    }
 
-    // 1. Tài khoản đăng nhập qua Google OAuth
-    if (user.password === "__google_oauth__" || user.authProvider === "google") {
+    if (user.authProvider === "google") {
       return { type: "oauth", value: "Google OAuth", masked: "Google OAuth", label: "Đăng nhập Google" };
     }
 
-    // 2. Mật khẩu được mã hóa an toàn qua GeoCryptoVault
-    if (user.passwordVault) {
-      try {
-        const decrypted = GeoCryptoVault.decrypt(user.passwordVault);
-        if (decrypted && typeof decrypted === "string" && decrypted.length > 0) {
-          return { type: "plain", value: decrypted, masked: "••••••••", label: "Mật khẩu mã hóa Vault" };
-        }
-      } catch (e) {}
+    if (user.authProvider === "hardcoded") {
+      return { type: "managed", value: "", masked: "Super Admin cố định", label: "Quản lý trực tiếp trong mã nguồn" };
     }
 
-    // 3. Mật khẩu dạng chuỗi gốc hoặc chuỗi Hash (PBKDF2/SHA-256)
-    if (user.password) {
-      if (user.password.startsWith("$pbkdf2$") || user.password.startsWith("$sha256$")) {
-        return { 
-          type: "hash", 
-          value: user.password, 
-          masked: "•••••••• (Hash)", 
-          shortValue: user.password.substring(0, 22) + "...", 
-          label: "Chuỗi băm PBKDF2/SHA256" 
-        };
-      }
-      return { type: "plain", value: user.password, masked: "••••••••", label: "Mật khẩu" };
-    }
-
-    return { type: "empty", value: "", masked: "—", label: "Chưa thiết lập" };
+    return {
+      type: "managed",
+      value: "",
+      masked: "Quản lý bởi Firebase",
+      label: "Mật khẩu do Firebase Authentication quản lý, không thể xem lại. Dùng chức năng \"Gửi email đặt lại mật khẩu\" nếu cần hỗ trợ thành viên."
+    };
   }
 
-  // Quản trị viên đặt lại mật khẩu cho thành viên
+  // Quản trị viên hỗ trợ thành viên đặt lại mật khẩu: vì SDK Firebase Auth phía
+  // client không cho phép Admin tự đặt mật khẩu THAY người khác, chức năng này
+  // gửi email đặt lại mật khẩu chuẩn của Firebase đến hộp thư của thành viên đó.
+  // Tham số newPassword được giữ lại để không phá vỡ chữ ký gọi cũ nhưng không
+  // còn được sử dụng.
   async adminResetUserPassword(userId, newPassword) {
     if (!this.isAdmin() && !this.isSuperAdmin()) {
       throw new Error("Chỉ Quản trị viên mới có quyền đặt lại mật khẩu cho thành viên!");
-    }
-    if (!newPassword || newPassword.length < 6) {
-      throw new Error("Mật khẩu mới phải có ít nhất 6 ký tự!");
     }
 
     const allUsers = this.getAllUsers();
@@ -1176,20 +1183,23 @@ class GeoAuthManager {
     }
 
     const emailLower = (targetUser.email || "").toLowerCase();
-    const isTargetSuper = emailLower === "vut510624@gmail.com";
-    if (isTargetSuper && !this.isSuperAdmin()) {
+    if (emailLower === SUPER_ADMIN_EMAIL) {
       throw new Error("Không thể thay đổi mật khẩu của Super Admin!");
     }
+    if (targetUser.authProvider === "google") {
+      throw new Error("Tài khoản này đăng nhập bằng Google, không có mật khẩu để đặt lại. Vui lòng hướng dẫn thành viên quản lý qua tài khoản Google của họ.");
+    }
 
-    const hashedNewPassword = await hashPassword(newPassword);
-    const passwordVault = GeoCryptoVault.encrypt(newPassword);
+    try {
+      await auth.sendPasswordResetEmail(targetUser.email);
+    } catch (err) {
+      throw new Error("Lỗi gửi email đặt lại mật khẩu: " + (err.message || err));
+    }
 
-    // Cập nhật Firestore
+    // Mở khóa nếu tài khoản đang bị khóa do dò mật khẩu
     if (typeof db !== "undefined") {
       try {
         await db.collection(COLLECTIONS.USERS).doc(targetUser.id).update({
-          password: hashedNewPassword,
-          passwordVault: passwordVault,
           isLocked: false,
           status: "active"
         });
@@ -1197,30 +1207,20 @@ class GeoAuthManager {
         console.warn("[Auth] Firestore update fallback:", err);
       }
     }
-
-    // Cập nhật bộ nhớ cache
-    targetUser.password = hashedNewPassword;
-    targetUser.passwordVault = passwordVault;
     targetUser.isLocked = false;
     targetUser.status = "active";
 
-    // Xóa số lần nhập sai nếu tài khoản đang bị khóa
     if (targetUser.email) {
-      this.clearAttempts(targetUser.email);
+      this.clearAttemptData(targetUser.email);
     }
 
     return true;
   }
 
-  // Đăng nhập nhanh với tư cách Admin (dùng nội bộ)
+  // Đăng nhập nhanh với tư cách Super Admin (dùng nội bộ / phát triển)
   quickLoginAs(role) {
-    const users = this.getAllUsers();
     if (role === "admin") {
-      const admin = users.find(u => u.email && u.email.toLowerCase() === "vut510624@gmail.com")
-        || users.find(u => u.email && u.email.toLowerCase() === "hshk.project@gmail.com")
-        || users.find(u => u.role === "admin")
-        || DEFAULT_USERS[0];
-      this.setCurrentUser(admin);
+      this.setCurrentUser(_buildHardcodedSuperAdminProfile());
     }
   }
 }

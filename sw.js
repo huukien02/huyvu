@@ -1,11 +1,16 @@
-const CACHE_NAME = "geo-edu-v5";
+const CACHE_NAME = "geo-edu-v7";
 const STATIC_ASSETS = [
   "./",
   "./index.html",
+  "./tai-lieu.html",
+  "./luu.html",
+  "./lien-he.html",
+  "./ai-chat.html",
+  "./quan-tri.html",
+  "./dia-cau-3d.html",
   "./css/style.css",
   "./js/app.js",
   "./js/modules/ui-theme.js",
-  "./js/modules/auth-gate.js",
   "./js/modules/confessions.js",
   "./js/modules/posts.js",
   "./js/modules/docs.js",

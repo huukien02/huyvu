@@ -4862,6 +4862,17 @@ html.geo-logged-in #auth-gate-overlay {
   pointer-events: none !important;
 }
 
+/* Đồng bộ hiển thị khối Đăng nhập/Đăng ký vs. Tài khoản ở header ngay từ lần
+   vẽ đầu tiên, dựa trên class được gán đồng bộ (trước khi JS chạy) ở đầu mỗi
+   trang. Tránh nháy nút Đăng nhập/Đăng ký mỗi khi chuyển sang trang khác.
+   updateAuthUI() (js/app.js) vẫn là nguồn xác thực cuối cùng: khi nó chạy và
+   gán trực tiếp style.display trên phần tử, giá trị đó luôn thắng các quy tắc
+   dưới đây (không dùng !important) nên không có xung đột hay bị "kẹt" trạng thái. */
+html.geo-guest-locked .auth-guest-only { display: flex; }
+html.geo-guest-locked .auth-user-only { display: none; }
+html.geo-logged-in .auth-guest-only { display: none; }
+html.geo-logged-in .auth-user-only { display: flex; }
+
 .auth-gate-screen {
   position: fixed;
   top: 0;
