@@ -55,17 +55,28 @@ runTest("Zero Emoji policy across all JS files", () => {
 // --- Test 4: Environment template & Security ---
 runTest(".env.example contains required template keys", () => {
   const envExample = fs.readFileSync(path.join(__dirname, "../.env.example"), "utf-8");
-  assert.ok(envExample.includes("PORT="));
-  assert.ok(envExample.includes("JWT_SECRET="));
   assert.ok(envExample.includes("GEMINI_API_KEY="));
   assert.ok(envExample.includes("FIREBASE_STORAGE_BUCKET="));
+  assert.ok(envExample.includes("FIREBASE_PROJECT_ID="));
 });
 
-// --- Test 5: AI config calls Gemini directly (no backend proxy) ---
-runTest("ai-chat.js defines a Gemini API key and endpoint for direct client calls", () => {
+// --- Test 5: AI config & Firebase config doc tu window.__ENV__, khong hardcode key that ---
+runTest("ai-chat.js va firebase-config.js doc key tu window.__ENV__ (khong hardcode)", () => {
   const aiChatJs = fs.readFileSync(path.join(__dirname, "../js/ai-chat.js"), "utf-8");
   assert.ok(aiChatJs.includes("generativelanguage.googleapis.com"));
-  assert.ok(aiChatJs.includes("API_KEY"));
+  assert.ok(aiChatJs.includes("window.__ENV__"));
+  assert.ok(!/API_KEY:\s*"AQ\./.test(aiChatJs), "ai-chat.js khong duoc hardcode API key that");
+
+  const firebaseConfigJs = fs.readFileSync(path.join(__dirname, "../js/firebase-config.js"), "utf-8");
+  assert.ok(firebaseConfigJs.includes("window.__ENV__"));
+  assert.ok(!/apiKey:\s*"AIza/.test(firebaseConfigJs), "firebase-config.js khong duoc hardcode API key that");
+});
+
+// --- Test 6: .env va js/env-config.js (chua secret that) khong duoc commit ---
+runTest(".gitignore chan .env va js/env-config.js", () => {
+  const gitignore = fs.readFileSync(path.join(__dirname, "../.gitignore"), "utf-8");
+  assert.ok(gitignore.includes(".env"));
+  assert.ok(gitignore.includes("js/env-config.js"));
 });
 
 console.log(`\nCI Test Results: ${passed} / ${total} Passed\n`);

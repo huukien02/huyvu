@@ -6,16 +6,23 @@
  * real-time data synchronization across all users and devices.
  */
 
-// Firebase Configuration
+// Firebase Configuration — doc tu js/env-config.js (sinh boi
+// tools/generate_env_config.js dua tren file .env, xem README/khong commit
+// gia tri that len Git). Chay "npm run build" sau khi doi .env.
+if (!window.__ENV__) {
+  console.error("[Firebase] Thieu js/env-config.js! Hay chay 'npm run build' (hoac 'node tools/generate_env_config.js') truoc khi mo trang.");
+}
+const _ENV = window.__ENV__ || {};
+
 const firebaseConfig = {
-  apiKey: "AIzaSyAs1LEj2WXO-6MvS7v2uWg5nPzVsqjbVf0",
-  authDomain: "crud-3fd86.firebaseapp.com",
-  databaseURL: "https://crud-3fd86-default-rtdb.firebaseio.com",
-  projectId: "crud-3fd86",
-  storageBucket: "crud-3fd86.firebasestorage.app",
-  messagingSenderId: "663063195093",
-  appId: "1:663063195093:web:5d892cb09a9d2016c7e15c",
-  measurementId: "G-579FGCK6TP"
+  apiKey: _ENV.FIREBASE_API_KEY,
+  authDomain: _ENV.FIREBASE_AUTH_DOMAIN,
+  databaseURL: _ENV.FIREBASE_DATABASE_URL,
+  projectId: _ENV.FIREBASE_PROJECT_ID,
+  storageBucket: _ENV.FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: _ENV.FIREBASE_MESSAGING_SENDER_ID,
+  appId: _ENV.FIREBASE_APP_ID,
+  measurementId: _ENV.FIREBASE_MEASUREMENT_ID
 };
 
 // Initialize Firebase

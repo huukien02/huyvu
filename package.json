@@ -3,7 +3,8 @@
   "version": "2.0.0",
   "description": "Nen tang Luu tru & Hoc tap Dia li Toan dien 4.0 - High School Help Kit",
   "scripts": {
-    "build": "node tools/build_html.js",
+    "build": "node tools/generate_env_config.js && node tools/build_html.js",
+    "build:env": "node tools/generate_env_config.js",
     "build:html": "node tools/build_html.js",
     "test": "node tests/run_node_tests.js"
   },

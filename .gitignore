@@ -1,0 +1,11 @@
+# Environment secrets - khong bao gio commit
+.env
+.env.local
+js/env-config.js
+
+# Node
+node_modules/
+
+# Editor/OS
+.DS_Store
+Thumbs.db

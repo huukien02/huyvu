@@ -8,7 +8,9 @@
 
 const AI_CONFIG = {
   API_URL: "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent",
-  API_KEY: "AQ.Ab8RN6IdFKFZMuiZNniOFPkjKlQLk2yavEifrUp_HyGp_UYDxA",
+  // Doc tu js/env-config.js (sinh boi tools/generate_env_config.js tu file .env)
+  // thay vi hardcode truc tiep trong ma nguon.
+  API_KEY: (window.__ENV__ && window.__ENV__.GEMINI_API_KEY) || "",
   MODEL: "gemini-flash-latest",
   SYSTEM_PROMPT: `Ban la tro ly AI chuyen sau cua du an "Geography Edu - High School Help Kit", mot nen tang giao duc Dia li danh cho hoc sinh THCS va THPT Viet Nam. Nhiem vu cua ban: Giai dap cau hoi ve kien thuc Dia li (tu nhien, kinh te - xa hoi, Dia li Viet Nam, Dia li dai cuong), Ho tro on luyen kien thuc Dia li theo chuong trinh THCS/THPT, Giup hoc sinh hieu ban do, Atlat, so lieu thong ke, Tu van phuong phap hoc tap va on thi Dia li hieu qua. Phong cach: Chuyen nghiep, chuan muc, de hieu, tieng Viet chuan muc, khong su dung emoji. Luon nho: Ban la "Tro Ly Dia Li AI" cua Geography Edu!`,
   MAX_HISTORY: 10,
