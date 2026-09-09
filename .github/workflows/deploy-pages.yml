@@ -17,6 +17,10 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Secret o day la Environment secrets (scoped theo environment), nen job
+    # nay BAT BUOC phai khai bao dung ten environment thi moi doc duoc gia
+    # tri that — thieu dong nay thi moi ${{ secrets.XXX }} se ra chuoi rong.
+    environment: github-pages
     steps:
       - name: Checkout
         uses: actions/checkout@v4
