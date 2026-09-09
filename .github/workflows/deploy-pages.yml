@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       # .env khong duoc commit len repo, nen phai dung GitHub Environment
       # Secrets de tao lai file .env ngay trong luc build, truoc khi sinh
@@ -56,7 +56,7 @@ jobs:
 
       - name: Install dependencies & run tests
         run: |
-          npm ci || npm install
+          npm install
           npm test
 
       - name: Build (sinh js/env-config.js + ghep 7 trang HTML)
