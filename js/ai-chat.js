@@ -7,11 +7,13 @@
 // Dynamic Runtime Key Decryption & Secure Provider removed.
 
 const AI_CONFIG = {
-  API_URL: "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent",
+  API_BASE: "https://generativelanguage.googleapis.com/v1beta/models",
+  MODELS: ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.7-flash", "gemini-flash-latest"],
+  API_URL: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
   // Doc tu js/env-config.js (sinh boi tools/generate_env_config.js tu file .env)
   // thay vi hardcode truc tiep trong ma nguon.
   API_KEY: (window.__ENV__ && window.__ENV__.GEMINI_API_KEY) || "",
-  MODEL: "gemini-flash-latest",
+  MODEL: "gemini-3.6-flash",
   SYSTEM_PROMPT: `Ban la tro ly AI chuyen sau cua du an "Geography Edu - High School Help Kit", mot nen tang giao duc Dia li danh cho hoc sinh THCS va THPT Viet Nam. Nhiem vu cua ban: Giai dap cau hoi ve kien thuc Dia li (tu nhien, kinh te - xa hoi, Dia li Viet Nam, Dia li dai cuong), Ho tro on luyen kien thuc Dia li theo chuong trinh THCS/THPT, Giup hoc sinh hieu ban do, Atlat, so lieu thong ke, Tu van phuong phap hoc tap va on thi Dia li hieu qua. Phong cach: Chuyen nghiep, chuan muc, de hieu, tieng Viet chuan muc, khong su dung emoji. Luon nho: Ban la "Tro Ly Dia Li AI" cua Geography Edu!`,
   MAX_HISTORY: 10,
   MAX_INPUT_LENGTH: 2000,
@@ -379,22 +381,41 @@ async function aiSendMessage() {
  try {
   let reply = "";
 
-  // Goi truc tiep Gemini API tu client (khong qua backend proxy)
-  const apiRes = await fetch(`${AI_CONFIG.API_URL}?key=${encodeURIComponent(AI_CONFIG.API_KEY)}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  // Goi truc tiep Gemini API tu client (khong qua backend proxy).
+  // Thu lan luot tung model: model nao qua tai (429/5xx) thi doi sang model tiep theo.
+  const apiKeyNow = (window.__ENV__ && window.__ENV__.GEMINI_API_KEY) || AI_CONFIG.API_KEY || "";
+  if (!apiKeyNow) throw new Error("Thieu API key Gemini (GEMINI_API_KEY). Hay cau hinh .env roi chay npm run build.");
+  const reqBody = {
       contents: apiMessages,
       systemInstruction: { parts: [{ text: AI_CONFIG.SYSTEM_PROMPT }] },
       generationConfig: { temperature: 0.35, maxOutputTokens: 1500 }
-    })
-  });
+  };
 
-  const apiData = await apiRes.json().catch(() => ({}));
-
-  if (!apiRes.ok) {
-    throw new Error(apiData.error?.message || `Lỗi phản hồi máy chủ (${apiRes.status})`);
+  const modelList = (AI_CONFIG.MODELS && AI_CONFIG.MODELS.length) ? AI_CONFIG.MODELS : [AI_CONFIG.MODEL];
+  let apiData = null;
+  let lastErr = null;
+  for (const m of modelList) {
+    for (let att = 1; att <= 2; att++) {
+      try {
+        const r = await fetch(AI_CONFIG.API_BASE + "/" + m + ":generateContent?key=" + encodeURIComponent(apiKeyNow), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(reqBody)
+        });
+        const d = await r.json().catch(() => ({}));
+        if (r.ok) { apiData = d; lastErr = null; break; }
+        const st = r.status || 0;
+        const em = (d && d.error && d.error.message) || ("Loi may chu (" + st + ")");
+        lastErr = new Error(em);
+        lastErr.status = st;
+        if (st !== 429 && st !== 500 && st !== 502 && st !== 503 && st !== 504) { att = 99; break; }
+      } catch (ne) { lastErr = ne; }
+      if (att === 1 && lastErr) await new Promise(function (rs) { setTimeout(rs, 1500); });
+    }
+    if (apiData) break;
+    if (lastErr && lastErr.status && lastErr.status !== 429 && lastErr.status !== 500 && lastErr.status !== 502 && lastErr.status !== 503 && lastErr.status !== 504) break;
   }
+  if (!apiData) throw (lastErr || new Error("Khong nhan duoc phan hoi tu may chu AI."));
 
   if (apiData.candidates && apiData.candidates[0]?.content?.parts?.[0]?.text) {
     reply = apiData.candidates[0].content.parts[0].text;
@@ -408,7 +429,10 @@ async function aiSendMessage() {
 
  } catch (err) {
   const t = new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
-  session.messages.push({ role: "assistant", content: `**Lỗi kết nối:** ${err.message}\n\nVui lòng kiểm tra lại kết nối mạng hoặc thử lại sau ít phút.`, time: t });
+  const rawMsg = (err && err.message) || "Loi khong xac dinh";
+  const overloaded = (err && (err.status === 429 || err.status === 503)) || /high demand|overload|quota/i.test(rawMsg);
+  const extra = overloaded ? "\n\nHe thong da tu dong thu lai qua nhieu model du phong nhung van qua tai. Vui long doi 1-2 phut roi gui lai." : "";
+  session.messages.push({ role: "assistant", content: `**Lỗi kết nối:** ${rawMsg}${extra}\n\nVui lòng kiểm tra lại kết nối mạng hoặc thử lại sau ít phút.`, time: t });
   aiSaveSessions();
  }
 
